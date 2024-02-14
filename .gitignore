@@ -1,0 +1,9 @@
+__pycache__
+checkpoints_weakly_supervised
+datapath
+*.zip
+*.png
+runs
+log
+__tmp*
+data
