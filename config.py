@@ -1,7 +1,3 @@
-
-
-
-
 class params:
     def __init__(self): 
         
@@ -38,7 +34,7 @@ class params:
         self.batch_size = 32
         self.nThreads = 8
         self.lr = 0.0001
-        self.dataroot = "/media/tky135/data/ShapeNetViPC-Dataset"
+        self.dataroot = "/workspace/ShapeNetViPC-Dataset"
         self.n_epochs = 200
         self.ckp_dir = "./checkpoint_path"
         self.ckp_epoch = 1
