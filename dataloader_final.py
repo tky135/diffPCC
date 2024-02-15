@@ -204,32 +204,32 @@ class ViPCDataLoader_ft(Dataset):
         # mask_save = mask_save.unsqueeze(0)
         # torchvision.io.write_png(mask_save, "view_%s.png" % key)
 
-        view_rgb_90 = self.transform2(Image.open(view_90_path))
-        view_rgb_180 = self.transform2(Image.open(view_180_path))
-        view_rgb_270 = self.transform2(Image.open(view_270_path))
+        # view_rgb_90 = self.transform2(Image.open(view_90_path))
+        # view_rgb_180 = self.transform2(Image.open(view_180_path))
+        # view_rgb_270 = self.transform2(Image.open(view_270_path))
 
         # create mask for view_rgb_90, view_rgb_180, view_rgb_270
-        thresh = 2.9
-        view_rgb_90 = view_rgb_90.permute(1,2,0)
-        view_rgb_90 = view_rgb_90.numpy()
-        mask_90 = torch.from_numpy((view_rgb_90[..., :3].sum(-1) < 2.9).astype(np.float32))
+        # thresh = 2.9
+        # view_rgb_90 = view_rgb_90.permute(1,2,0)
+        # view_rgb_90 = view_rgb_90.numpy()
+        # mask_90 = torch.from_numpy((view_rgb_90[..., :3].sum(-1) < 2.9).astype(np.float32))
 
-        view_rgb_180 = view_rgb_180.permute(1,2,0)
-        view_rgb_180 = view_rgb_180.numpy()
-        mask_180 = torch.from_numpy((view_rgb_180[..., :3].sum(-1) < 2.9).astype(np.float32))
+        # view_rgb_180 = view_rgb_180.permute(1,2,0)
+        # view_rgb_180 = view_rgb_180.numpy()
+        # mask_180 = torch.from_numpy((view_rgb_180[..., :3].sum(-1) < 2.9).astype(np.float32))
 
-        view_rgb_270 = view_rgb_270.permute(1,2,0)
-        view_rgb_270 = view_rgb_270.numpy()
-        mask_270 = torch.from_numpy((view_rgb_270[..., :3].sum(-1) < 2.9).astype(np.float32))
+        # view_rgb_270 = view_rgb_270.permute(1,2,0)
+        # view_rgb_270 = view_rgb_270.numpy()
+        # mask_270 = torch.from_numpy((view_rgb_270[..., :3].sum(-1) < 2.9).astype(np.float32))
 
-        view_rgb_90 = torch.from_numpy(view_rgb_90).type(torch.float32)
-        view_rgb_90 = view_rgb_90.permute(2,0,1)
+        # view_rgb_90 = torch.from_numpy(view_rgb_90).type(torch.float32)
+        # view_rgb_90 = view_rgb_90.permute(2,0,1)
 
-        view_rgb_180 = torch.from_numpy(view_rgb_180).type(torch.float32)
-        view_rgb_180 = view_rgb_180.permute(2,0,1)
+        # view_rgb_180 = torch.from_numpy(view_rgb_180).type(torch.float32)
+        # view_rgb_180 = view_rgb_180.permute(2,0,1)
 
-        view_rgb_270 = torch.from_numpy(view_rgb_270).type(torch.float32)
-        view_rgb_270 = view_rgb_270.permute(2,0,1)
+        # view_rgb_270 = torch.from_numpy(view_rgb_270).type(torch.float32)
+        # view_rgb_270 = view_rgb_270.permute(2,0,1)
 
         # save_img(view_rgb_90, "__tmp__/beforeview_rgb_90%s.png" % key)
         # save_img(view_rgb_180, "__tmp__/beforeview_rgb_180%s.png" % key)
@@ -292,7 +292,7 @@ class ViPCDataLoader_ft(Dataset):
         except:
             pc_partpart = farthest_point_sample(torch.from_numpy(pc_part).float(), 2048)
     
-        return views.float(), torch.from_numpy(pc).float(), torch.from_numpy(pc_part).float(), torch.from_numpy(cam_eye).float(), mask, torch.from_numpy(pc_partpart).float(), view_rgb, view_rgb_90, view_rgb_180, view_rgb_270, mask_90, mask_180, mask_270
+        return views.float(), torch.from_numpy(pc).float(), torch.from_numpy(pc_part).float(), torch.from_numpy(cam_eye).float(), mask, torch.from_numpy(pc_partpart).float(), view_rgb#, view_rgb_90, view_rgb_180, view_rgb_270, mask_90, mask_180, mask_270
 
     def __len__(self):
         return len(self.key)

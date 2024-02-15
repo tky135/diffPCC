@@ -165,3 +165,7 @@ zipp
 
 setuptools
 ninja
+diffusers
+kiui
+transformers
+accelerate

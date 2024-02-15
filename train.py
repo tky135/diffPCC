@@ -38,7 +38,7 @@ VERSION = '0.0'
 BATCH_SIZE = int(opt.batch_size)
 MAX_EPOCH = int(opt.n_epochs)
 EVAL_EPOCH = int(opt.eval_epoch)
-RESUME = True
+RESUME = False
 
 
 TIME_FLAG = time.asctime(time.localtime(time.time()))
@@ -146,12 +146,12 @@ def train_one_step_render(data, optimizer, network, renderer):
     eye = data[3].to(device)
     mask_gt = data[4].to(device)
     view_rgb = data[6].to(device)
-    view_rgb_90 = data[7].to(device)
-    view_rgb_180 = data[8].to(device)
-    view_rgb_270 = data[9].to(device)
-    mask_90 = data[10].to(device)
-    mask_180 = data[11].to(device)
-    mask_270 = data[12].to(device)
+    # view_rgb_90 = data[7].to(device)
+    # view_rgb_180 = data[8].to(device)
+    # view_rgb_270 = data[9].to(device)
+    # mask_90 = data[10].to(device)
+    # mask_180 = data[11].to(device)
+    # mask_270 = data[12].to(device)
 
     # print("image shape", image.shape)
     # print("partial shape", partial.shape)
@@ -211,14 +211,14 @@ def train_one_step_render(data, optimizer, network, renderer):
     # save_point_cloud(complete_90[0], "__tmp__/complete_90.ply")
     proj_90 = renderer(complete_90, eye, colors)
     loss_rot += my_zero123.train_step(proj_90.permute(0, 3, 1, 2), [0] * view_rgb.shape[0], [90] * view_rgb.shape[0], [0] * view_rgb.shape[0])
-    # complete_180 = rotate_pc_on_cam_torch(complete_90, 0, 90)
+    complete_180 = rotate_pc_on_cam_torch(complete_90, 0, 90)
     # # save_point_cloud(complete_180[0], "__tmp__/complete_180.ply")
-    # proj_180 = renderer(complete_180, eye, colors)
-    # loss_rot += my_zero123.train_step(proj_180.permute(0, 3, 1, 2), [0] * view_rgb.shape[0], [180] * view_rgb.shape[0], [0] * view_rgb.shape[0])
-    # complete_270 = rotate_pc_on_cam_torch(complete_180, 0, 90)
+    proj_180 = renderer(complete_180, eye, colors)
+    loss_rot += my_zero123.train_step(proj_180.permute(0, 3, 1, 2), [0] * view_rgb.shape[0], [180] * view_rgb.shape[0], [0] * view_rgb.shape[0])
+    complete_270 = rotate_pc_on_cam_torch(complete_180, 0, 90)
     # # save_point_cloud(complete_270[0], "__tmp__/complete_270.ply")
-    # proj_270 = renderer(complete_270, eye, colors)
-    # loss_rot += my_zero123.train_step(proj_270.permute(0, 3, 1, 2), [0] * view_rgb.shape[0], [270] * view_rgb.shape[0], [0] * view_rgb.shape[0])
+    proj_270 = renderer(complete_270, eye, colors)
+    loss_rot += my_zero123.train_step(proj_270.permute(0, 3, 1, 2), [0] * view_rgb.shape[0], [270] * view_rgb.shape[0], [0] * view_rgb.shape[0])
     
     # proj_partial = renderer(partial, eye)
     # proj_partial = proj_partial.permute(0,3,1,2).squeeze(1)
@@ -245,8 +245,8 @@ def train_one_step_render(data, optimizer, network, renderer):
     loss_pc, _, _ = calc_dcd(complete, batch_gt)
     loss_pc= loss_pc.mean()
 
-    loss_final = loss_pc + 0.10*(loss_img)# + loss_rot
-    print(loss_pc, loss_img)#, loss_rot)
+    loss_final = loss_pc + 0.10*(loss_img) + loss_rot
+    print(loss_pc.item(), loss_img.item(), loss_rot.item())
 
     
     optimizer.zero_grad()
@@ -346,50 +346,50 @@ opt.lr = 0.0001
 
 for epoch in range(resume_epoch, resume_epoch + opt.n_epochs+1):
 
-    if epoch % EVAL_EPOCH == 0: 
+    # if epoch % EVAL_EPOCH == 0: 
         
-        with torch.no_grad():
-            model.eval()
-            i = 0
-            Loss = 0
-            for data in tqdm(test_loader):
+    #     with torch.no_grad():
+    #         model.eval()
+    #         i = 0
+    #         Loss = 0
+    #         for data in tqdm(test_loader):
 
-                i += 1
-                image = data[0].to(device)
-                partial = data[2].to(device)
-                gt = data[1].to(device)
+    #             i += 1
+    #             image = data[0].to(device)
+    #             partial = data[2].to(device)
+    #             gt = data[1].to(device)
                 
 
-                partial = farthest_point_sample(partial, 2048)
-                gt = farthest_point_sample(gt, 2048)
+    #             partial = farthest_point_sample(partial, 2048)
+    #             gt = farthest_point_sample(gt, 2048)
 
-                partial = partial.permute(0, 2, 1)
+    #             partial = partial.permute(0, 2, 1)
 
-                complete = model(partial, image)[:, :, :3]
-                loss = loss_cd_eval(complete, gt)
+    #             complete = model(partial, image)[:, :, :3]
+    #             loss = loss_cd_eval(complete, gt)
                 
-                Loss += loss
+    #             Loss += loss
 
-            Loss = Loss/i
-            board_writer.add_scalar(
-                "Average_Loss_epochs_test", Loss.item(), epoch)
+    #         Loss = Loss/i
+    #         board_writer.add_scalar(
+    #             "Average_Loss_epochs_test", Loss.item(), epoch)
 
-            if Loss < best_loss:
-                best_loss = Loss
-                best_epoch = epoch
-            print(best_epoch, ' ', best_loss)
+    #         if Loss < best_loss:
+    #             best_loss = Loss
+    #             best_epoch = epoch
+    #         print(best_epoch, ' ', best_loss)
 
-        print('****************************')
-        print("test loss: \t", Loss, "\tbest: \t", best_loss, "\tbest epoch:\t", best_epoch)
-        print('****************************')
-    if epoch % opt.ckp_epoch == 0: 
+    #     print('****************************')
+    #     print("test loss: \t", Loss, "\tbest: \t", best_loss, "\tbest epoch:\t", best_epoch)
+    #     print('****************************')
+    # if epoch % opt.ckp_epoch == 0: 
 
-        torch.save({
-            'epoch': epoch,
-            'model_state_dict': model.state_dict(),
-            'optimizer_state_dict': optimizer.state_dict(),
-            'loss': Loss
-        }, f'./log/{MODEL}/{MODEL}_{VERSION}_{BATCH_SIZE}_{CLASS}_{FLAG}_{TIME_FLAG}/ckpt_{epoch}.pt')
+    #     torch.save({
+    #         'epoch': epoch,
+    #         'model_state_dict': model.state_dict(),
+    #         'optimizer_state_dict': optimizer.state_dict(),
+    #         'loss': Loss
+    #     }, f'./log/{MODEL}/{MODEL}_{VERSION}_{BATCH_SIZE}_{CLASS}_{FLAG}_{TIME_FLAG}/ckpt_{epoch}.pt')
 
     # for each epoch, train with partpart first
     # then train with partpart + view rendering

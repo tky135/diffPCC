@@ -162,11 +162,13 @@ class Zero123(nn.Module):
             t_in = torch.cat([t] * 2)
 
             T = self.get_cam_embeddings(elevation, azimuth, radius, default_elevation)
-            cc_emb = torch.cat([self.embeddings[0].repeat(batch_size, 1, 1), T], dim=-1)
+            # cc_emb = torch.cat([self.embeddings[0].repeat(batch_size, 1, 1), T], dim=-1)
+            cc_emb = torch.cat([self.embeddings[0].unsqueeze(1), T], dim=-1)
             cc_emb = self.pipe.clip_camera_projection(cc_emb)
             cc_emb = torch.cat([cc_emb, torch.zeros_like(cc_emb)], dim=0)
 
-            vae_emb = self.embeddings[1].repeat(batch_size, 1, 1, 1)
+            # vae_emb = self.embeddings[1].repeat(batch_size, 1, 1, 1)
+            vae_emb = self.embeddings[1]
             vae_emb = torch.cat([vae_emb, torch.zeros_like(vae_emb)], dim=0)
 
             noise_pred = self.unet(
