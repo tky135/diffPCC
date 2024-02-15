@@ -9,3 +9,4 @@ __tmp*
 data
 build
 *.egg*
+*.tky

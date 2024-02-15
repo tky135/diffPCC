@@ -31,7 +31,7 @@ else:
     CLASS = 'plane'
 
 
-MODEL = 'remove_mixup2'
+MODEL = 'BASELINE'
 FLAG = 'train'
 DEVICE = 'cuda:0'
 VERSION = '0.0'
@@ -238,14 +238,14 @@ def train_one_step_render(data, optimizer, network, renderer):
     tau = 0.02 
     edge_map = torch.where(edge>tau, 0.4, 1.0) 
 
-    # proj = torch.max(proj, dim=1)[0]
+    proj = torch.max(proj, dim=1)[0]
     # edge_map = edge_map.unsqueeze(1).repeat(1, 3, 1, 1)
-    loss_img = torch.mean((proj-view_rgb)**2)     # loss_img is only calulated on the edge pixels
-    # loss_img = torch.mean(((proj-mask_gt)*edge_map)**2)     # loss_img is only calulated on the edge pixels
+    # loss_img = torch.mean((proj-view_rgb)**2)     # loss_img is only calulated on the edge pixels
+    loss_img = torch.mean(((proj-mask_gt)*edge_map)**2)     # loss_img is only calulated on the edge pixels
     loss_pc, _, _ = calc_dcd(complete, batch_gt)
     loss_pc= loss_pc.mean()
 
-    loss_final = loss_pc + 0.10*(loss_img) + loss_rot
+    loss_final = loss_pc + 0.10*(loss_img)# + loss_rot
     print(loss_pc.item(), loss_img.item(), loss_rot.item())
 
     
@@ -346,50 +346,50 @@ opt.lr = 0.0001
 
 for epoch in range(resume_epoch, resume_epoch + opt.n_epochs+1):
 
-    # if epoch % EVAL_EPOCH == 0: 
+    if epoch % EVAL_EPOCH == 0: 
         
-    #     with torch.no_grad():
-    #         model.eval()
-    #         i = 0
-    #         Loss = 0
-    #         for data in tqdm(test_loader):
+        with torch.no_grad():
+            model.eval()
+            i = 0
+            Loss = 0
+            for data in tqdm(test_loader):
 
-    #             i += 1
-    #             image = data[0].to(device)
-    #             partial = data[2].to(device)
-    #             gt = data[1].to(device)
+                i += 1
+                image = data[0].to(device)
+                partial = data[2].to(device)
+                gt = data[1].to(device)
                 
 
-    #             partial = farthest_point_sample(partial, 2048)
-    #             gt = farthest_point_sample(gt, 2048)
+                partial = farthest_point_sample(partial, 2048)
+                gt = farthest_point_sample(gt, 2048)
 
-    #             partial = partial.permute(0, 2, 1)
+                partial = partial.permute(0, 2, 1)
 
-    #             complete = model(partial, image)[:, :, :3]
-    #             loss = loss_cd_eval(complete, gt)
+                complete = model(partial, image)[:, :, :3]
+                loss = loss_cd_eval(complete, gt)
                 
-    #             Loss += loss
+                Loss += loss
 
-    #         Loss = Loss/i
-    #         board_writer.add_scalar(
-    #             "Average_Loss_epochs_test", Loss.item(), epoch)
+            Loss = Loss/i
+            board_writer.add_scalar(
+                "Average_Loss_epochs_test", Loss.item(), epoch)
 
-    #         if Loss < best_loss:
-    #             best_loss = Loss
-    #             best_epoch = epoch
-    #         print(best_epoch, ' ', best_loss)
+            if Loss < best_loss:
+                best_loss = Loss
+                best_epoch = epoch
+            print(best_epoch, ' ', best_loss)
 
-    #     print('****************************')
-    #     print("test loss: \t", Loss, "\tbest: \t", best_loss, "\tbest epoch:\t", best_epoch)
-    #     print('****************************')
-    # if epoch % opt.ckp_epoch == 0: 
+        print('****************************')
+        print("test loss: \t", Loss, "\tbest: \t", best_loss, "\tbest epoch:\t", best_epoch)
+        print('****************************')
+    if epoch % opt.ckp_epoch == 0: 
 
-    #     torch.save({
-    #         'epoch': epoch,
-    #         'model_state_dict': model.state_dict(),
-    #         'optimizer_state_dict': optimizer.state_dict(),
-    #         'loss': Loss
-    #     }, f'./log/{MODEL}/{MODEL}_{VERSION}_{BATCH_SIZE}_{CLASS}_{FLAG}_{TIME_FLAG}/ckpt_{epoch}.pt')
+        torch.save({
+            'epoch': epoch,
+            'model_state_dict': model.state_dict(),
+            'optimizer_state_dict': optimizer.state_dict(),
+            'loss': Loss
+        }, f'./log/{MODEL}/{MODEL}_{VERSION}_{BATCH_SIZE}_{CLASS}_{FLAG}_{TIME_FLAG}/ckpt_{epoch}.pt')
 
     # for each epoch, train with partpart first
     # then train with partpart + view rendering
@@ -417,8 +417,8 @@ for epoch in range(resume_epoch, resume_epoch + opt.n_epochs+1):
 
     # # partpart + rendering model training
     for data in tqdm(train_loader_res):
-        if i > 400:
-            break
+        # if i > 400:
+        #     break
         loss = train_one_step_render(data, optimizer, network=model, renderer=render)
         i += 1
         if i % opt.loss_print == 0:
