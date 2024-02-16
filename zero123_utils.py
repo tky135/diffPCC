@@ -280,7 +280,7 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
 
-    parser.add_argument('--input', type=str, default='14.png')
+    parser.add_argument('--input', type=str, default='__tmp__/image.png')
     parser.add_argument('--elevation', type=float, default=0, help='delta elevation angle in [-90, 90]')
     parser.add_argument('--azimuth', type=float, default=0, help='delta azimuth angle in [-180, 180]')
     parser.add_argument('--radius', type=float, default=0, help='delta camera radius multiplier in [-0.5, 0.5]')
@@ -297,12 +297,12 @@ if __name__ == '__main__':
     image = image.permute(2, 0, 1).unsqueeze(0).contiguous().to(device)
     image = F.interpolate(image, (256, 256), mode='bilinear', align_corners=False)
 
-    image2 = kiui.read_image("18.png", mode='tensor')
-    if (len(image2.shape) == 2):
-        image2 = image2.unsqueeze(2).repeat(1, 1, 3)
-    image2 = image2.permute(2, 0, 1).unsqueeze(0).contiguous().to(device)
-    image2 = F.interpolate(image2, (256, 256), mode='bilinear', align_corners=False)
-    print(f'[INFO] loading model ...')
+    # image2 = kiui.read_image("18.png", mode='tensor')
+    # if (len(image2.shape) == 2):
+    #     image2 = image2.unsqueeze(2).repeat(1, 1, 3)
+    # image2 = image2.permute(2, 0, 1).unsqueeze(0).contiguous().to(device)
+    # image2 = F.interpolate(image2, (256, 256), mode='bilinear', align_corners=False)
+    # print(f'[INFO] loading model ...')
     
     if opt.stable:
         zero123 = Zero123(device, model_key='ashawkey/stable-zero123-diffusers')
@@ -314,7 +314,15 @@ if __name__ == '__main__':
     azimuth = opt.azimuth
     elevation = opt.elevation
     ### testing train_step
-    images = torch.cat([image] * 4 + [image2] * 4, dim=0)
+    images = torch.cat([image] * 4 + [image] * 4, dim=0)
+    # change black background to white background
+    image_mask = torch.sum(images, dim=1, keepdim=True) == 0
+    images[image_mask.repeat(1, 3, 1, 1)] = 1
+    # images = images * 255
+    # images = images.type(torch.uint8).cpu()
+    # for i in range(8):
+    #     torchvision.io.write_png(images[i], f"__tmp__/tky_{i}.png")
+    # raise Exception("break")
     zero123.get_img_embeds(images)
     elevation = torch.tensor([0] * 8)
     azimuth = torch.tensor([0, 90, 180, 270, 0, 90, 180, 270])
@@ -327,10 +335,12 @@ if __name__ == '__main__':
     for i in range(8):
         torchvision.io.write_png(images_cpu[i], f"__tmp__/tky_{i}.png")
 
+    # raise Exception("break")
+
     zero123.get_img_embeds(images[0].unsqueeze(0))
-    images = images[[0]]
-    elevation = [90]
-    azimuth = [0]
+    images = images[[1]]
+    elevation = [0]
+    azimuth = [180]
     radius = [0]
 
     loss = zero123.train_step(images, elevation, azimuth, radius, step_ratio=0.002, default_elevation=0)

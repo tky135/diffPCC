@@ -15,6 +15,7 @@ from decoder.utils.draw import *
 import open3d as o3d
 import torchvision
 from renderer import Renderer
+import kiui
 def save_point_cloud(points, path):
     if torch.is_tensor(points):
         points = points.detach().cpu().numpy()
@@ -138,7 +139,7 @@ class ViPCDataLoader_ft(Dataset):
 
         self.transform = transforms.Compose([
             transforms.Resize(224),
-            transforms.ToTensor()
+            # transforms.ToTensor()
         ])
 
         self.transform2 = transforms.Compose([
@@ -188,52 +189,26 @@ class ViPCDataLoader_ft(Dataset):
         view_180_path = view_path.replace('.png', '_e0_a180.png')
         view_270_path = view_path.replace('.png', '_e0_a270.png')
 
-        
-        views = self.transform(Image.open(view_path))
+        # views = kiui.read_image(view_path, mode='tensor').permute(2, 0, 1).type(torch.float32)
+        # views = self.transform(views)
+        # alpha = views[3,:,:]
+        # views = views[:3,:,:]   # removed the alpha channel
+        views = self.transform2(Image.open(view_path))
+        alpha = views[3,:,:]
         views = views[:3,:,:]   # removed the alpha channel
+
         views_t_p = views.permute(1,2,0)
         views_t_p = views_t_p.numpy()
-        view_rgb = torch.from_numpy(views_t_p).type(torch.float32)
-        view_rgb = view_rgb.permute(2,0,1)  # rgb image of the given view
+        view_rgb = views # rgb image of the given view
+
+        # view_rgb[(alpha == 0).unsqueeze(0).repeat(3, 1, 1)] = 1
+        save_img(view_rgb, "__tmp__/view_rgb_for_fun2.png")
 
         # save_img(view_rgb, "__tmp__/view_rgb%s.png" % key)
         # mask is defined as the pixels that are not all black
-        mask = torch.from_numpy((views_t_p[..., :3].max(-1) != 0).astype(np.float32))
-        # mask_save = mask * 255
-        # mask_save = mask_save.type(torch.uint8)
-        # mask_save = mask_save.unsqueeze(0)
-        # torchvision.io.write_png(mask_save, "view_%s.png" % key)
+        # mask = torch.from_numpy((views_t_p[..., :3].max(-1) != 1).astype(np.float32))
+        mask = alpha
 
-        # view_rgb_90 = self.transform2(Image.open(view_90_path))
-        # view_rgb_180 = self.transform2(Image.open(view_180_path))
-        # view_rgb_270 = self.transform2(Image.open(view_270_path))
-
-        # create mask for view_rgb_90, view_rgb_180, view_rgb_270
-        # thresh = 2.9
-        # view_rgb_90 = view_rgb_90.permute(1,2,0)
-        # view_rgb_90 = view_rgb_90.numpy()
-        # mask_90 = torch.from_numpy((view_rgb_90[..., :3].sum(-1) < 2.9).astype(np.float32))
-
-        # view_rgb_180 = view_rgb_180.permute(1,2,0)
-        # view_rgb_180 = view_rgb_180.numpy()
-        # mask_180 = torch.from_numpy((view_rgb_180[..., :3].sum(-1) < 2.9).astype(np.float32))
-
-        # view_rgb_270 = view_rgb_270.permute(1,2,0)
-        # view_rgb_270 = view_rgb_270.numpy()
-        # mask_270 = torch.from_numpy((view_rgb_270[..., :3].sum(-1) < 2.9).astype(np.float32))
-
-        # view_rgb_90 = torch.from_numpy(view_rgb_90).type(torch.float32)
-        # view_rgb_90 = view_rgb_90.permute(2,0,1)
-
-        # view_rgb_180 = torch.from_numpy(view_rgb_180).type(torch.float32)
-        # view_rgb_180 = view_rgb_180.permute(2,0,1)
-
-        # view_rgb_270 = torch.from_numpy(view_rgb_270).type(torch.float32)
-        # view_rgb_270 = view_rgb_270.permute(2,0,1)
-
-        # save_img(view_rgb_90, "__tmp__/beforeview_rgb_90%s.png" % key)
-        # save_img(view_rgb_180, "__tmp__/beforeview_rgb_180%s.png" % key)
-        # save_img(view_rgb_270, "__tmp__/beforeview_rgb_270%s.png" % key)
         # load partial points
         with open(pc_path,'rb') as f:
             pc = pickle.load(f).astype(np.float32)
@@ -243,19 +218,18 @@ class ViPCDataLoader_ft(Dataset):
         if pc_part.shape[0]<self.pc_input_num:
             pc_part = np.repeat(pc_part,(self.pc_input_num//pc_part.shape[0])+1,axis=0)[0:self.pc_input_num]
 
-
         
         # load the view metadata
         image_view_id = view_path.split('.')[0].split('/')[-1]
         part_view_id = pc_part_path.split('.')[0].split('/')[-1]
-        
+        print(image_view_id, part_view_id)
         view_metadata = np.loadtxt(view_path[:-6]+'rendering_metadata.txt')
 
-        # cam_eye should be the intrinsic matrix
+        # cam_eye is the 3D coordinates of the camera
         cam_eye = np.loadtxt(view_path[:-6]+'camera_calibration.txt', delimiter='/')    # where does camera_calibration.txt come from?
         
-        theta_part = math.radians(view_metadata[int(part_view_id),0])
-        phi_part = math.radians(view_metadata[int(part_view_id),1])
+        theta_part = math.radians(view_metadata[int(part_view_id),0])   # azimuth
+        phi_part = math.radians(view_metadata[int(part_view_id),1])    # elevation
 
         theta_img = math.radians(view_metadata[int(image_view_id),0])
         phi_img = math.radians(view_metadata[int(image_view_id),1])
@@ -292,7 +266,7 @@ class ViPCDataLoader_ft(Dataset):
         except:
             pc_partpart = farthest_point_sample(torch.from_numpy(pc_part).float(), 2048)
     
-        return views.float(), torch.from_numpy(pc).float(), torch.from_numpy(pc_part).float(), torch.from_numpy(cam_eye).float(), mask, torch.from_numpy(pc_partpart).float(), view_rgb#, view_rgb_90, view_rgb_180, view_rgb_270, mask_90, mask_180, mask_270
+        return views.float(), torch.from_numpy(pc).float(), torch.from_numpy(pc_part).float(), torch.from_numpy(cam_eye).float(), mask, torch.from_numpy(pc_partpart).float(), view_rgb, torch.from_numpy(view_metadata[int(image_view_id)]).float()
 
     def __len__(self):
         return len(self.key)

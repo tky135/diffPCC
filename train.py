@@ -31,14 +31,14 @@ else:
     CLASS = 'plane'
 
 
-MODEL = 'BASELINE'
+MODEL = 'COMEONTKY'
 FLAG = 'train'
 DEVICE = 'cuda:0'
 VERSION = '0.0'
 BATCH_SIZE = int(opt.batch_size)
 MAX_EPOCH = int(opt.n_epochs)
 EVAL_EPOCH = int(opt.eval_epoch)
-RESUME = False
+RESUME = True
 
 
 TIME_FLAG = time.asctime(time.localtime(time.time()))
@@ -146,43 +146,14 @@ def train_one_step_render(data, optimizer, network, renderer):
     eye = data[3].to(device)
     mask_gt = data[4].to(device)
     view_rgb = data[6].to(device)
-    # view_rgb_90 = data[7].to(device)
-    # view_rgb_180 = data[8].to(device)
-    # view_rgb_270 = data[9].to(device)
-    # mask_90 = data[10].to(device)
-    # mask_180 = data[11].to(device)
-    # mask_270 = data[12].to(device)
-
-    # print("image shape", image.shape)
-    # print("partial shape", partial.shape)
-    # print("partpart shape", partpart.shape)
-    # print("eye shape", eye.shape)
-    # print("mask_gt shape", mask_gt.shape)
-    # print("view_rgb shape", view_rgb.shape)
-    # print("view_rgb_90 shape", view_rgb_90.shape)
-    # print("view_rgb_180 shape", view_rgb_180.shape)
-    # print("view_rgb_270 shape", view_rgb_270.shape)
-    # print("mask_90 shape", mask_90.shape)
-    # print("mask_180 shape", mask_180.shape)
-    # print("mask_270 shape", mask_270.shape)
+    view_metadata = data[7].to(device)
     
     save_img(image[0], "__tmp__/image.png")
-    # save_point_cloud(partial[0], "__tmp__/partial.ply")
-    # save_point_cloud(partpart[0], "__tmp__/partpart.ply")
-    # save_img(mask_gt[0], "__tmp__/mask_gt.png")
-    # save_img(view_rgb[0], "__tmp__/view_rgb.png")
-    # save_img(view_rgb_90[0], "__tmp__/view_rgb_90.png")
-    # save_img(view_rgb_180[0], "__tmp__/view_rgb_180.png")
-    # save_img(view_rgb_270[0], "__tmp__/view_rgb_270.png")
-    # save_img(mask_90[0], "__tmp__/mask_90.png")
-    # save_img(mask_180[0], "__tmp__/mask_180.png")
-    # save_img(mask_270[0], "__tmp__/mask_270.png")
 
     partial = farthest_point_sample(partial, 2048)
-
+    save_point_cloud(partial[0], "__tmp__/partial.ply")
     partpart = partpart.permute(0, 2, 1)
     partial = partial.permute(0, 2, 1)
-
     # combine two shapes arbitrarily
 
     mixed, mixed_gt, mixed_img = mix_shapes_2(partpart, partial, image)
@@ -198,27 +169,55 @@ def train_one_step_render(data, optimizer, network, renderer):
 
     complete, colors = complete[:, :, :3], complete[:, :, 3:6]
     # render the completed shape
+    # partial = partial
     proj = renderer(complete, eye, colors)
+    # for i in range(0, 8):
+    #     save_img(image[i], f"__tmp__/image_{i}.png")
+    # for i in range(0, 8):
+    #     save_img(proj_view[i].permute(2, 0, 1), f"__tmp__/proj_{i}_view.png")
+    # for i in range(0, 8):
+    #     difference = np.abs(proj_view[i].max(dim=2)[0].detach().cpu().numpy() -  mask_gt[i].cpu().numpy())
+    #     plt.imsave('__tmp__/difference_view_%d.png' % i, difference)
+    # proj = renderer(partial, eye, colors)
+    # for i in range(0, 8):
+    #     save_img(proj[i].permute(2, 0, 1), f"__tmp__/proj_{i}_eye.png")
+    # for i in range(0, 8):
+    #     difference = np.abs(proj[i].max(dim=2)[0].detach().cpu().numpy() -  mask_gt[i].cpu().numpy())
+    #     plt.imsave('__tmp__/difference_eye_%d.png' % i, difference)
+    # print(mask_gt.shape)
+    # raise Exception("break")
     # print("complete shape", complete.shape)
     # print("proj shape", proj.shape)
-    proj = proj.permute(0,3,1,2).squeeze(1)
+    proj = proj.permute(0,3,1,2)
     save_img(proj[0], "__tmp__/proj.png")
-    # save_point_cloud(complete[0], "__tmp__/complete.ply")
+    save_point_cloud(complete[0], "__tmp__/complete.ply")
     # rotate completed by 90, 180, 270
     my_zero123.get_img_embeds(view_rgb)
     loss_rot = 0
-    complete_90 = rotate_pc_on_cam_torch(complete, 0, 90)
-    # save_point_cloud(complete_90[0], "__tmp__/complete_90.ply")
+
+    # sample a random angle
+    elevation = torch.rand(1) * 40
+    azimuth = torch.rand(1) * 360
+    complete_90 = rotate_pc_on_cam_torch(complete, elevation, azimuth)
+    save_point_cloud(complete_90[0], "__tmp__/complete_90.ply")
     proj_90 = renderer(complete_90, eye, colors)
-    loss_rot += my_zero123.train_step(proj_90.permute(0, 3, 1, 2), [0] * view_rgb.shape[0], [90] * view_rgb.shape[0], [0] * view_rgb.shape[0])
-    complete_180 = rotate_pc_on_cam_torch(complete_90, 0, 90)
-    # # save_point_cloud(complete_180[0], "__tmp__/complete_180.ply")
-    proj_180 = renderer(complete_180, eye, colors)
-    loss_rot += my_zero123.train_step(proj_180.permute(0, 3, 1, 2), [0] * view_rgb.shape[0], [180] * view_rgb.shape[0], [0] * view_rgb.shape[0])
-    complete_270 = rotate_pc_on_cam_torch(complete_180, 0, 90)
-    # # save_point_cloud(complete_270[0], "__tmp__/complete_270.ply")
-    proj_270 = renderer(complete_270, eye, colors)
-    loss_rot += my_zero123.train_step(proj_270.permute(0, 3, 1, 2), [0] * view_rgb.shape[0], [270] * view_rgb.shape[0], [0] * view_rgb.shape[0])
+    save_png_90 = proj_90.permute(0,3,1,2)[0].detach().cpu()
+    save_img(save_png_90, "__tmp__/proj_90.png")
+    loss_rot += my_zero123.train_step(proj_90.permute(0, 3, 1, 2), [elevation.item()] * view_rgb.shape[0], [azimuth.item()] * view_rgb.shape[0], [0] * view_rgb.shape[0])
+    # complete_180 = rotate_pc_on_cam_torch(complete, 20, 180)
+    # save_point_cloud(complete_180[0], "__tmp__/complete_180.ply")
+    # proj_180 = renderer(complete_180, eye, colors)
+    # save_png_180 = proj_180.permute(0,3,1,2)[0].detach().cpu()
+    # save_img(save_png_180, "__tmp__/proj_180.png")
+    # loss_rot += my_zero123.train_step(proj_180.permute(0, 3, 1, 2), [0] * view_rgb.shape[0], [180] * view_rgb.shape[0], [0] * view_rgb.shape[0])
+    # complete_270 = rotate_pc_on_cam_torch(complete, 40, 270)
+    # save_point_cloud(complete_270[0], "__tmp__/complete_270.ply")
+    # proj_270 = renderer(complete_270, eye, colors)
+    # save_png_270 = proj_270.permute(0,3,1,2)[0].detach().cpu()
+    # save_img(save_png_270, "__tmp__/proj_270.png")
+
+    # # raise Exception("break")
+    # loss_rot += my_zero123.train_step(proj_270.permute(0, 3, 1, 2), [40] * view_rgb.shape[0], [270] * view_rgb.shape[0], [0] * view_rgb.shape[0], step_ratio=0.002)
     
     # proj_partial = renderer(partial, eye)
     # proj_partial = proj_partial.permute(0,3,1,2).squeeze(1)
@@ -238,10 +237,10 @@ def train_one_step_render(data, optimizer, network, renderer):
     tau = 0.02 
     edge_map = torch.where(edge>tau, 0.4, 1.0) 
 
-    proj = torch.max(proj, dim=1)[0]
+    # proj = torch.max(proj, dim=1)[0]
     # edge_map = edge_map.unsqueeze(1).repeat(1, 3, 1, 1)
-    # loss_img = torch.mean((proj-view_rgb)**2)     # loss_img is only calulated on the edge pixels
-    loss_img = torch.mean(((proj-mask_gt)*edge_map)**2)     # loss_img is only calulated on the edge pixels
+    loss_img = torch.mean((proj-view_rgb)**2)     # loss_img is only calulated on the edge pixels
+    # loss_img = torch.mean(((proj-mask_gt)*edge_map)**2)     # loss_img is only calulated on the edge pixels
     loss_pc, _, _ = calc_dcd(complete, batch_gt)
     loss_pc= loss_pc.mean()
 
@@ -303,19 +302,19 @@ test_loader = DataLoader(ViPCDataset_test,
 
 
 if RESUME:
-    ckpt_path = "checkpoints_weakly_supervised/plane_weakly_sup.pt"
+    ckpt_path = "ckpt_39.pt"
     ckpt_dict = torch.load(ckpt_path)
     model_state_dict = ckpt_dict['model_state_dict']
-    model_state_dict = {k: v for k, v in model_state_dict.items() if 'decoder' not in k or 'conv4' not in k}
+    # model_state_dict = {k: v for k, v in model_state_dict.items() if 'decoder' not in k or 'conv4' not in k}
     # model.load_state_dict(model_state_dict)
     load_my_state_dict(model, model_state_dict)
     
-    # optimizer.load_state_dict(ckpt_dict['optimizer_state_dict'])
+    optimizer.load_state_dict(ckpt_dict['optimizer_state_dict'])
     resume_epoch = ckpt_dict['epoch']
-    # for state in optimizer.state.values():
-        # for k, v in state.items():
-            # if isinstance(v, torch.Tensor):
-                # state[k] = v.cuda()
+    for state in optimizer.state.values():
+        for k, v in state.items():
+            if isinstance(v, torch.Tensor):
+                state[k] = v.cuda()
 
 
 if not os.path.exists(os.path.join(CKPT_RECORD_FOLDER)):
@@ -345,7 +344,7 @@ set_seed()
 opt.lr = 0.0001
 
 for epoch in range(resume_epoch, resume_epoch + opt.n_epochs+1):
-
+    Loss = 1e9
     if epoch % EVAL_EPOCH == 0: 
         
         with torch.no_grad():

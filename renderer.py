@@ -84,17 +84,22 @@ class Renderer(nn.Module):
         self.radius = opt.radius
         self.points_per_pixel = opt.points_per_pixel
         self.dist = opt.dist
-        self.compositor = AlphaCompositor()
+        self.compositor = AlphaCompositor(background_color=(0, 0, 0))
         self.colors = colors
 
-    def forward(self, points, eye, colors=None):
+    def forward(self, points, eye, colors=None, view_metadata=None):
+        
         if colors is not None:
             point_cloud = PointClouds3D(points=points, features=colors)
         else:
             point_cloud = PointClouds3D(points=points, features=self.colors)
-        R, T = look_at_view_transform(eye=eye)
+        if view_metadata is not None:
+            R, T = look_at_view_transform(dist= 6, elev=torch.zeros_like(view_metadata[:, 1]), azim=torch.zeros_like(view_metadata[:, 0]))
+        else:
+            R, T = look_at_view_transform(eye=eye)
+        # print(2 * torch.atan(torch.tensor(35 / (2*32))) * 180 / torch.pi)
         cameras = FoVPerspectiveCameras(R=R, T=T, device=points.device)
-       
+
 
         raster_settings = PointsRasterizationSettings(
             image_size=self.image_size, radius=self.radius, points_per_pixel=self.points_per_pixel)
