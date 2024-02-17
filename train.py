@@ -196,14 +196,14 @@ def train_one_step_render(data, optimizer, network, renderer):
     loss_rot = 0
 
     # sample a random angle
-    elevation = torch.rand(1) * 40
+    elevation = 40
     azimuth = torch.rand(1) * 360
     complete_90 = rotate_pc_on_cam_torch(complete, elevation, azimuth)
     save_point_cloud(complete_90[0], "__tmp__/complete_90.ply")
     proj_90 = renderer(complete_90, eye, colors)
     save_png_90 = proj_90.permute(0,3,1,2)[0].detach().cpu()
     save_img(save_png_90, "__tmp__/proj_90.png")
-    loss_rot += my_zero123.train_step(proj_90.permute(0, 3, 1, 2), [elevation.item()] * view_rgb.shape[0], [azimuth.item()] * view_rgb.shape[0], [0] * view_rgb.shape[0])
+    loss_rot += my_zero123.train_step(proj_90.permute(0, 3, 1, 2), [elevation] * view_rgb.shape[0], [azimuth.item()] * view_rgb.shape[0], [0] * view_rgb.shape[0])
     # complete_180 = rotate_pc_on_cam_torch(complete, 20, 180)
     # save_point_cloud(complete_180[0], "__tmp__/complete_180.ply")
     # proj_180 = renderer(complete_180, eye, colors)
@@ -244,7 +244,7 @@ def train_one_step_render(data, optimizer, network, renderer):
     loss_pc, _, _ = calc_dcd(complete, batch_gt)
     loss_pc= loss_pc.mean()
 
-    loss_final = loss_pc + 0.10*(loss_img)# + loss_rot
+    loss_final = loss_pc + 0.10*(loss_img) + 1e-5 * loss_rot
     print(loss_pc.item(), loss_img.item(), loss_rot.item())
 
     
@@ -302,7 +302,7 @@ test_loader = DataLoader(ViPCDataset_test,
 
 
 if RESUME:
-    ckpt_path = "ckpt_39.pt"
+    ckpt_path = "ckpt_83.pt"
     ckpt_dict = torch.load(ckpt_path)
     model_state_dict = ckpt_dict['model_state_dict']
     # model_state_dict = {k: v for k, v in model_state_dict.items() if 'decoder' not in k or 'conv4' not in k}
