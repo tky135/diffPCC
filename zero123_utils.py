@@ -185,7 +185,7 @@ class Zero123(nn.Module):
 
         target = (latents - grad).detach()
 
-        loss = 0.5 * F.mse_loss(latents.float(), target, reduction='sum')
+        loss = 0.5 * F.mse_loss(latents.float(), target, reduction='mean')
         # print(loss.shape)
         # for l in loss:
         #     for i in l[0]:
@@ -280,7 +280,7 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
 
-    parser.add_argument('--input', type=str, default='__tmp__/image.png')
+    parser.add_argument('--input', type=str, default='tkys_gaussian_blur.png')
     parser.add_argument('--elevation', type=float, default=0, help='delta elevation angle in [-90, 90]')
     parser.add_argument('--azimuth', type=float, default=0, help='delta azimuth angle in [-180, 180]')
     parser.add_argument('--radius', type=float, default=0, help='delta camera radius multiplier in [-0.5, 0.5]')
@@ -291,10 +291,11 @@ if __name__ == '__main__':
     device = torch.device('cuda')
 
     print(f'[INFO] loading image from {opt.input} ...')
-    image = kiui.read_image(opt.input, mode='tensor')
+    # image = kiui.read_image(opt.input, mode='tensor')
+    image = torchvision.io.read_image(opt.input).to(device).float().unsqueeze(0) / 255
     if (len(image.shape) == 2):
         image = image.unsqueeze(2).repeat(1, 1, 3)
-    image = image.permute(2, 0, 1).unsqueeze(0).contiguous().to(device)
+    # image = image.permute(2, 0, 1).unsqueeze(0).contiguous().to(device)
     image = F.interpolate(image, (256, 256), mode='bilinear', align_corners=False)
 
     # image2 = kiui.read_image("18.png", mode='tensor')
@@ -335,7 +336,7 @@ if __name__ == '__main__':
     for i in range(8):
         torchvision.io.write_png(images_cpu[i], f"__tmp__/tky_{i}.png")
 
-    # raise Exception("break")
+    raise Exception("break")
 
     zero123.get_img_embeds(images[0].unsqueeze(0))
     images = images[[1]]

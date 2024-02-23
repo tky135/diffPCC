@@ -10,7 +10,7 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 from dataloader_part import ViPCDataLoader
 from dataloader import ViPCDataLoader2
-from dataloader_final import ViPCDataLoader_ft, rotate_pc_on_cam_torch
+from dataloader_final import ViPCDataLoader_ft, rotate_pc_on_cam_torch, rotate_back_pc_on_cam_torch
 from dataloader_final import save_img, save_point_cloud
 import numpy as np
 import torch.optim as optim
@@ -19,9 +19,11 @@ import torch.nn as nn
 from vis_utils import mix_shapes_2
 from renderer import Renderer
 from zero123_utils import Zero123
+from tky_model import PointCloud
 
+import torchvision
 my_zero123 = Zero123(device=torch.device("cuda:0"))
-
+tky_model = PointCloud(2048).to(torch.device("cuda:0"))
 opt = params()
 
 if opt.cat != None:
@@ -31,7 +33,7 @@ else:
     CLASS = 'plane'
 
 
-MODEL = 'COMEONTKY'
+MODEL = 'FIXED_RENDERING'
 FLAG = 'train'
 DEVICE = 'cuda:0'
 VERSION = '0.0'
@@ -47,6 +49,22 @@ CKPT_FILE = f'./log/{MODEL}/{MODEL}_{VERSION}_{BATCH_SIZE}_{CLASS}_{FLAG}_{TIME_
 CONFIG_FILE = f'./log/{MODEL}/{MODEL}_{VERSION}_{BATCH_SIZE}_{CLASS}_{FLAG}_{TIME_FLAG}/CONFIG.txt'
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+
+gaussian_blur = torchvision.transforms.GaussianBlur(21, sigma=0.1)
+
+# test the gaussian blur
+# img = torchvision.io.read_image("image.png").unsqueeze(0).float()
+# img = img / 255
+# # img = torch.zeros(1, 3, 224, 224)
+# # img[0, 0, 100, 100] = 1
+# # img[0, 1, 100, 100] = 1
+# # img[0, 2, 100, 100] = 1
+# img = gaussian_blur(img)
+# # img = 1 - img
+# # print(img)
+# save_img(img[0], "tkys_gaussian_blur.png")
+# raise Exception("break")
+
 
 if __name__ == "__main__":
     # store temp files
@@ -139,19 +157,21 @@ def train_one_step(data, optimizer, network):
     return loss_total
 
 def train_one_step_render(data, optimizer, network, renderer):
+    global step
+    global total_step
+
+    step += 1
     # second train the model using partpart method + view rendering
     image = data[0].to(device)
     partial = data[2].to(device)
     partpart = data[5].to(device)
     eye = data[3].to(device)
     mask_gt = data[4].to(device)
-    view_rgb = data[6].to(device)
+    # view_rgb = data[6].to(device)
     view_metadata = data[7].to(device)
     
-    save_img(image[0], "__tmp__/image.png")
-
     partial = farthest_point_sample(partial, 2048)
-    save_point_cloud(partial[0], "__tmp__/partial.ply")
+    # save_point_cloud(partial[0], "__tmp__/partial.ply")
     partpart = partpart.permute(0, 2, 1)
     partial = partial.permute(0, 2, 1)
     # combine two shapes arbitrarily
@@ -165,45 +185,79 @@ def train_one_step_render(data, optimizer, network, renderer):
     batch_input = partpart
     batch_view = image
 
+    ### using the original network
     complete = network(batch_input, batch_view)
+    complete, colors = complete[:, :, :3], complete[:, :, 3:6].clip(0, 1)
+    
+    ### using tky model
+    # complete, colors = tky_model()
 
-    complete, colors = complete[:, :, :3], complete[:, :, 3:6]
+    # blur the image by 3x3 gaussian kernel
+    # image = gaussian_blur(image)
+
+
     # render the completed shape
     # partial = partial
-    proj = renderer(complete, eye, colors)
-    # for i in range(0, 8):
-    #     save_img(image[i], f"__tmp__/image_{i}.png")
-    # for i in range(0, 8):
-    #     save_img(proj_view[i].permute(2, 0, 1), f"__tmp__/proj_{i}_view.png")
-    # for i in range(0, 8):
-    #     difference = np.abs(proj_view[i].max(dim=2)[0].detach().cpu().numpy() -  mask_gt[i].cpu().numpy())
-    #     plt.imsave('__tmp__/difference_view_%d.png' % i, difference)
-    # proj = renderer(partial, eye, colors)
-    # for i in range(0, 8):
-    #     save_img(proj[i].permute(2, 0, 1), f"__tmp__/proj_{i}_eye.png")
-    # for i in range(0, 8):
-    #     difference = np.abs(proj[i].max(dim=2)[0].detach().cpu().numpy() -  mask_gt[i].cpu().numpy())
-    #     plt.imsave('__tmp__/difference_eye_%d.png' % i, difference)
-    # print(mask_gt.shape)
-    # raise Exception("break")
-    # print("complete shape", complete.shape)
-    # print("proj shape", proj.shape)
+    proj = renderer(complete, eye, colors).clip(0, 1)
     proj = proj.permute(0,3,1,2)
+    # 1. try white background by using 1 - image
+    image = 1 - image
+    proj = 1 - proj
+
+    # 2. try gaussian blur
+    image = gaussian_blur(image)
+    proj = gaussian_blur(proj)
+
     save_img(proj[0], "__tmp__/proj.png")
+    save_img(image[0], "__tmp__/image.png")
     save_point_cloud(complete[0], "__tmp__/complete.ply")
+    save_point_cloud(partial[0], "__tmp__/partial.ply")
     # rotate completed by 90, 180, 270
-    my_zero123.get_img_embeds(view_rgb)
+
+    # check zero123 generated images
+    
+    # images = torch.cat([image] * 4, dim=0)
+    # elevation = torch.tensor([40] * 4)
+    # azimuth = torch.tensor([0, 90, 180, 270])
+    # radius = torch.tensor([0] * 4)
+    # my_zero123.get_img_embeds(images)
+    # images = my_zero123.refine(images, elevation, azimuth, radius, strength=0, default_elevation=0)
+    # images_cpu = images.cpu()
+    # images_cpu = images_cpu * 255
+    # images_cpu = images_cpu.type(torch.uint8)
+    # for i in range(4):
+    #     torchvision.io.write_png(images_cpu[i], f"__tmp__/tky_{i}.png")
+
+    # rotate
+    my_zero123.get_img_embeds(image)
     loss_rot = 0
 
-    # sample a random angle
-    elevation = 40
-    azimuth = torch.rand(1) * 360
-    complete_90 = rotate_pc_on_cam_torch(complete, elevation, azimuth)
-    save_point_cloud(complete_90[0], "__tmp__/complete_90.ply")
-    proj_90 = renderer(complete_90, eye, colors)
-    save_png_90 = proj_90.permute(0,3,1,2)[0].detach().cpu()
-    save_img(save_png_90, "__tmp__/proj_90.png")
-    loss_rot += my_zero123.train_step(proj_90.permute(0, 3, 1, 2), [elevation] * view_rgb.shape[0], [azimuth.item()] * view_rgb.shape[0], [0] * view_rgb.shape[0])
+    # sample a random elevation and azimuth
+    
+    elevation = torch.randint(-40, 40, (1,)).item()
+    azimuth = torch.randint(0, 360, (1,)).item()
+
+    # print(elevation, azimuth)
+
+    my_ele = view_metadata[0][1]
+    my_azi = view_metadata[0][0]
+    original_pc = rotate_back_pc_on_cam_torch(complete, my_ele, my_azi)
+
+    rotate_again = rotate_pc_on_cam_torch(original_pc, my_ele - elevation, my_azi - azimuth)
+    rendered_rand_view = renderer(rotate_again, eye, colors).permute(0,3,1,2)
+    rendered_rand_view = 1 - rendered_rand_view
+    rendered_rand_view = gaussian_blur(rendered_rand_view)
+    save_rendered_rand_view = rendered_rand_view[0].detach().cpu()
+
+    # get target rand_view image
+    # target_image = my_zero123.refine(image.unsqueeze(0), [elevation], [azimuth], [0], strength=0)
+    save_img(save_rendered_rand_view, "__tmp__/save_rendered_rand_view.png")
+    # save_img(target_image.squeeze(), "__tmp__/save_target_rand_view.png")
+
+    # print(target_image.shape)
+    # raise Exception("break")
+    print(step / total_step)
+    loss_rot += my_zero123.train_step(rendered_rand_view, [elevation] * image.shape[0], [azimuth] * image.shape[0], [0] * image.shape[0], step_ratio=step / total_step)
     # complete_180 = rotate_pc_on_cam_torch(complete, 20, 180)
     # save_point_cloud(complete_180[0], "__tmp__/complete_180.ply")
     # proj_180 = renderer(complete_180, eye, colors)
@@ -239,12 +293,12 @@ def train_one_step_render(data, optimizer, network, renderer):
 
     # proj = torch.max(proj, dim=1)[0]
     # edge_map = edge_map.unsqueeze(1).repeat(1, 3, 1, 1)
-    loss_img = torch.mean((proj-view_rgb)**2)     # loss_img is only calulated on the edge pixels
+    loss_img = F.mse_loss(proj, image, reduction='mean')
     # loss_img = torch.mean(((proj-mask_gt)*edge_map)**2)     # loss_img is only calulated on the edge pixels
     loss_pc, _, _ = calc_dcd(complete, batch_gt)
     loss_pc= loss_pc.mean()
 
-    loss_final = loss_pc + 0.10*(loss_img) + 1e-5 * loss_rot
+    loss_final = 0*loss_pc + 0*loss_img + 1e-3 * loss_rot
     print(loss_pc.item(), loss_img.item(), loss_rot.item())
 
     
@@ -291,6 +345,9 @@ train_loader_res = DataLoader(ViPCDataset_train_res,
                           shuffle=True,
                           drop_last=True)
 
+step = 0
+total_step = len(ViPCDataset_train_res)
+
 
 ViPCDataset_test = ViPCDataLoader2(
     'dataset/test_list2.txt', data_path=opt.dataroot, status="test", category=opt.cat)
@@ -302,7 +359,7 @@ test_loader = DataLoader(ViPCDataset_test,
 
 
 if RESUME:
-    ckpt_path = "ckpt_83.pt"
+    ckpt_path = "ckpt_39.pt"
     ckpt_dict = torch.load(ckpt_path)
     model_state_dict = ckpt_dict['model_state_dict']
     # model_state_dict = {k: v for k, v in model_state_dict.items() if 'decoder' not in k or 'conv4' not in k}
@@ -340,55 +397,55 @@ print('Training Starting')
 print(f'Training Class: {CLASS}')
 print('--------------------')
 
-set_seed()
+# set_seed(1)
 opt.lr = 0.0001
 
 for epoch in range(resume_epoch, resume_epoch + opt.n_epochs+1):
     Loss = 1e9
-    if epoch % EVAL_EPOCH == 0: 
+    # if epoch % EVAL_EPOCH == 0: 
         
-        with torch.no_grad():
-            model.eval()
-            i = 0
-            Loss = 0
-            for data in tqdm(test_loader):
+    #     with torch.no_grad():
+    #         model.eval()
+    #         i = 0
+    #         Loss = 0
+    #         for data in tqdm(test_loader):
 
-                i += 1
-                image = data[0].to(device)
-                partial = data[2].to(device)
-                gt = data[1].to(device)
+    #             i += 1
+    #             image = data[0].to(device)
+    #             partial = data[2].to(device)
+    #             gt = data[1].to(device)
                 
 
-                partial = farthest_point_sample(partial, 2048)
-                gt = farthest_point_sample(gt, 2048)
+    #             partial = farthest_point_sample(partial, 2048)
+    #             gt = farthest_point_sample(gt, 2048)
 
-                partial = partial.permute(0, 2, 1)
+    #             partial = partial.permute(0, 2, 1)
 
-                complete = model(partial, image)[:, :, :3]
-                loss = loss_cd_eval(complete, gt)
+    #             complete = model(partial, image)[:, :, :3]
+    #             loss = loss_cd_eval(complete, gt)
                 
-                Loss += loss
+    #             Loss += loss
 
-            Loss = Loss/i
-            board_writer.add_scalar(
-                "Average_Loss_epochs_test", Loss.item(), epoch)
+    #         Loss = Loss/i
+    #         board_writer.add_scalar(
+    #             "Average_Loss_epochs_test", Loss.item(), epoch)
 
-            if Loss < best_loss:
-                best_loss = Loss
-                best_epoch = epoch
-            print(best_epoch, ' ', best_loss)
+    #         if Loss < best_loss:
+    #             best_loss = Loss
+    #             best_epoch = epoch
+    #         print(best_epoch, ' ', best_loss)
 
-        print('****************************')
-        print("test loss: \t", Loss, "\tbest: \t", best_loss, "\tbest epoch:\t", best_epoch)
-        print('****************************')
-    if epoch % opt.ckp_epoch == 0: 
+    #     print('****************************')
+    #     print("test loss: \t", Loss, "\tbest: \t", best_loss, "\tbest epoch:\t", best_epoch)
+    #     print('****************************')
+    # if epoch % opt.ckp_epoch == 0: 
 
-        torch.save({
-            'epoch': epoch,
-            'model_state_dict': model.state_dict(),
-            'optimizer_state_dict': optimizer.state_dict(),
-            'loss': Loss
-        }, f'./log/{MODEL}/{MODEL}_{VERSION}_{BATCH_SIZE}_{CLASS}_{FLAG}_{TIME_FLAG}/ckpt_{epoch}.pt')
+    #     torch.save({
+    #         'epoch': epoch,
+    #         'model_state_dict': model.state_dict(),
+    #         'optimizer_state_dict': optimizer.state_dict(),
+    #         'loss': Loss
+    #     }, f'./log/{MODEL}/{MODEL}_{VERSION}_{BATCH_SIZE}_{CLASS}_{FLAG}_{TIME_FLAG}/ckpt_{epoch}.pt')
 
     # for each epoch, train with partpart first
     # then train with partpart + view rendering

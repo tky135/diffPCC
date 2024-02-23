@@ -153,7 +153,7 @@ class ViPCDataLoader_ft(Dataset):
 
     def __getitem__(self, idx):
         
-        key = self.key[idx]
+        key = self.key[5]
        
         pc_part_path = os.path.join(self.imcomplete_path,key.split(';')[0]+'/'+ key.split(';')[1]+'/'+key.split(';')[-1].replace('\n', '')+'.dat')
         # view_align = True, means the view of image equal to the view of partial points
@@ -202,7 +202,7 @@ class ViPCDataLoader_ft(Dataset):
         view_rgb = views # rgb image of the given view
 
         # view_rgb[(alpha == 0).unsqueeze(0).repeat(3, 1, 1)] = 1
-        save_img(view_rgb, "__tmp__/view_rgb_for_fun2.png")
+        # save_img(view_rgb, "__tmp__/view_rgb_for_fun2.png")
 
         # save_img(view_rgb, "__tmp__/view_rgb%s.png" % key)
         # mask is defined as the pixels that are not all black
@@ -222,7 +222,7 @@ class ViPCDataLoader_ft(Dataset):
         # load the view metadata
         image_view_id = view_path.split('.')[0].split('/')[-1]
         part_view_id = pc_part_path.split('.')[0].split('/')[-1]
-        print(image_view_id, part_view_id)
+        # print(image_view_id, part_view_id)
         view_metadata = np.loadtxt(view_path[:-6]+'rendering_metadata.txt')
 
         # cam_eye is the 3D coordinates of the camera
@@ -244,7 +244,7 @@ class ViPCDataLoader_ft(Dataset):
         # for the point cloud, first y then x
         # to get the reverse rotation, first x then y
         pc_part = rotation_y(rotation_x(pc_part, - phi_part),np.pi + theta_part)
-        # save_point_cloud(pc_part, "second_%s.ply" % key)
+        # save_point_cloud(pc_part, "imagesecond_%s.ply" % key)
         # rotate the partial point cloud to the view of the image
         pc_part = rotation_x(rotation_y(pc_part, np.pi - theta_img), phi_img)
         # save_point_cloud(pc_part, "third_%s.ply" % key)
@@ -285,6 +285,12 @@ def rotate_pc_on_cam_torch(pc, elevation, azimuth):
     azimuth = math.radians(azimuth)
     elevation = math.radians(elevation)
     rotate_pc = rotation_x_torch(rotation_y_torch(pc,  torch.pi - azimuth), elevation)
+    return rotate_pc
+
+def rotate_back_pc_on_cam_torch(pc, elevation, azimuth):
+    azimuth = math.radians(azimuth)
+    elevation = math.radians(elevation)
+    rotate_pc = rotation_y_torch(rotation_x_torch(pc,  -elevation), torch.pi + azimuth)
     return rotate_pc
 
 def rotate_pc_on_cam_tky(pc, elevation, azimuth):

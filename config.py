@@ -31,10 +31,10 @@ class params:
         self.num_heads = 4
 
         #Training parameters
-        self.batch_size = 8
+        self.batch_size = 1
         self.nThreads = 8
         self.lr = 0.0001
-        self.dataroot = "/workspace/ShapeNetViPC-Dataset"
+        self.dataroot = "/media/tky135/rsch/datasets/ShapeNetViPC-Dataset"
         self.n_epochs = 200
         self.ckp_dir = "./checkpoint_path"
         self.ckp_epoch = 1
