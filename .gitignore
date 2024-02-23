@@ -10,3 +10,5 @@ data
 build
 *.egg*
 *.tky
+*.html
+*.js
